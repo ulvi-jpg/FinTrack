@@ -21,3 +21,14 @@ function addExpense(expenses, amount, category, date, comment) {
   expenses.push(expense);
   return expense;
 }
+function deleteExpense(expenses, id) {
+  const index = expenses.findIndex(e => e.id === id);
+  if (index === -1) return false;
+  expenses.splice(index, 1);
+  return true;
+}
+
+function filterByCategory(expenses, category) {
+  const c = category.trim().toLowerCase();
+  return expenses.filter(e => e.category.toLowerCase() === c);
+}
