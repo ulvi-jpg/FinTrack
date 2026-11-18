@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Тесты FinTrack</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f4f6f8; margin: 0; }
+    main { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+    #summary { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+    h2 { margin: 20px 0 8px; font-size: 18px; }
+    .row { background: #fff; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
+    .ok { color: #15803d; }
+    .fail { color: #b91c1c; }
+    .msg { font-size: 13px; margin-left: 24px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Тесты FinTrack</h1>
+  <div id="summary"></div>
+  <div id="out"></div>
+</main>
+
+<script src="expenses.js"></script>
+<script src="report.js"></script>
+<script>
+// ---- Мини-фреймворк для тестов ----
+const results = [];
+let currentGroup = '';
+
+function group(name) { currentGroup = name; }
+
+function test(id, name, fn) {
+  try {
+    fn();
+    results.push({ group: currentGroup, id, name, ok: true });
+  } catch (e) {
+    results.push({ group: currentGroup, id, name, ok: false, msg: e.message });
+  }
+}
+
+function assertEqual(actual, expected) {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error('Ожидалось ' + b + ', получено ' + a);
+}
+
+function assertThrows(fn) {
+  try { fn(); } catch (e) { return; }
+  throw new Error('Ожидалась ошибка, но её не было');
+}
+
+// ---- Модульные тесты ----
+group('Модульные тесты');
+test('U1', 'Добавление расхода', () => {
+  const list = [];
+  const e = addExpense(list, 100, 'Еда', '2026-11-05', '');
+  assertEqual(e.id, 1);
+  assertEqual(list.length, 1);
+  assertEqual(e.category, 'Еда');
+});
+test('U2', 'Номер растёт автоматически', () => {
+  const list = [];
+  addExpense(list, 10, 'Еда', '2026-11-05', '');
+  const second = addExpense(list, 20, 'Кино', '2026-11-06', '');
+  assertEqual(second.id, 2);
+});
+test('U3', 'Нулевая сумма', () => {
+  assertThrows(() => addExpense([], 0, 'Еда', '2026-11-05', ''));
+});
+test('U4', 'Пустая категория', () => {
+  assertThrows(() => addExpense([], 100, '   ', '2026-11-05', ''));
+});
+test('U5', 'Удаление существующего расхода', () => {
+  const list = [];
+  addExpense(list, 100, 'Еда', '2026-11-05', '');
+  assertEqual(deleteExpense(list, 1), true);
+  assertEqual(list.length, 0);
+});
+test('U6', 'Удаление несуществующего расхода', () => {
+  const list = [];
+  addExpense(list, 100, 'Еда', '2026-11-05', '');
+  assertEqual(deleteExpense(list, 99), false);
+  assertEqual(list.length, 1);
+});
+test('U7', 'Фильтр без учёта регистра', () => {
+  const list = [];
+  addExpense(list, 10, 'Еда', '2026-11-05', '');
+  addExpense(list, 20, 'еда', '2026-11-06', '');
+  addExpense(list, 30, 'Кино', '2026-11-07', '');
+  assertEqual(filterByCategory(list, 'ЕДА').length, 2);
+});
+test('U8', 'Итог за месяц', () => {
+  const list = [];
+  addExpense(list, 100, 'Еда', '2026-11-05', '');
+  addExpense(list, 50, 'Кино', '2026-11-20', '');
+  addExpense(list, 30, 'Еда', '2026-10-31', '');
+  assertEqual(getMonthTotal(list, 2026, 11), 150);
+});
+test('U9', 'Итоги по категориям', () => {
+  const list = [];
+  addExpense(list, 100, 'Еда', '2026-11-05', '');
+  addExpense(list, 50, 'еда', '2026-11-06', '');
+  addExpense(list, 20, 'Кино', '2026-11-07', '');
+  assertEqual(getTotalsByCategory(list, 2026, 11), { 'еда': 150, 'кино': 20 });
+});
+test('U10', 'Лимит превышен', () => {
+  const list = [];
+  addExpense(list, 150, 'Еда', '2026-11-05', '');
+  assertEqual(getExceededCategories(list, { 'еда': 100 }, 2026, 11), ['еда']);
+});
+test('U11', 'Лимит не превышен', () => {
+  const list = [];
+  addExpense(list, 50, 'Еда', '2026-11-05', '');
+  assertEqual(getExceededCategories(list, { 'еда': 100 }, 2026, 11), []);
+});
+
+// ---- Сценарные тесты ----
+group('Сценарные тесты');
+test('S1', 'Учёт расходов за месяц', () => {
+  const list = [];
+  addExpense(list, 500, 'Еда', '2026-11-05', '');
+  addExpense(list, 200, 'Транспорт', '2026-11-06', '');
+  addExpense(list, 300, 'Еда', '2026-11-07', '');
+  deleteExpense(list, 2);
+  assertEqual(getMonthTotal(list, 2026, 11), 800);
+  assertEqual(getTotalsByCategory(list, 2026, 11), { 'еда': 800 });
+});
+test('S2', 'Контроль месячного лимита', () => {
+  const list = [];
+  const limits = { 'еда': 400 };
+  addExpense(list, 500, 'Еда', '2026-11-05', '');
+  assertEqual(getExceededCategories(list, limits, 2026, 11), ['еда']);
+  deleteExpense(list, 1);
+  assertEqual(getExceededCategories(list, limits, 2026, 11), []);
+});
+test('S3', 'Поиск расходов по категории', () => {
+  const list = [];
+  addExpense(list, 100, 'Еда', '2026-11-05', '');
+  addExpense(list, 200, 'Кино', '2026-11-06', '');
+  addExpense(list, 300, 'еда', '2026-11-07', '');
+  assertEqual(filterByCategory(list, 'Еда').length, 2);
+  assertEqual(filterByCategory(list, 'Кино').length, 1);
+  assertEqual(filterByCategory(list, 'Спорт').length, 0);
+});
+
+// ---- Вывод результатов ----
+let html = '';
+let last = '';
+for (const r of results) {
+  if (r.group !== last) { html += '<h2>' + r.group + '</h2>'; last = r.group; }
+  html += '<div class="row ' + (r.ok ? 'ok' : 'fail') + '">' + (r.ok ? '✔' : '✘') + ' ' + r.id + '. ' + r.name;
+  if (!r.ok) html += '<div class="msg">' + r.msg + '</div>';
+  html += '</div>';
+}
+const passed = results.filter(r => r.ok).length;
+document.getElementById('out').innerHTML = html;
+document.getElementById('summary').textContent = 'Пройдено ' + passed + ' из ' + results.length;
+</script>
+</body>
+</html>
