@@ -18,3 +18,8 @@ function getTotalsByCategory(expenses, year, month) {
   }
   return totals;
 }
+
+function getExceededCategories(expenses, limits, year, month) {
+  const totals = getTotalsByCategory(expenses, year, month);
+  return Object.keys(totals).filter(c => limits[c] !== undefined && totals[c] > limits[c]);
+}
